@@ -79,7 +79,7 @@ def create_mesh(context, mesh_struct, coll):
     # shader material stuff
     if mesh_struct.shader_materials:
         for i, shaderMat in enumerate(mesh_struct.shader_materials):
-            (material, principled) = create_material_from_shader_material(
+            material, principled = create_material_from_shader_material(
                 context, mesh_struct.name(), shaderMat)
             mesh.materials.append(material)
             principleds.append(principled)
