@@ -124,7 +124,7 @@ def rig_mesh(mesh_struct, hierarchy, rig, sub_object=None):
 
             mesh.vertices[i].co = matrix @ mesh_struct.verts[i]
 
-            (_, rotation, _) = matrix.decompose()
+            _, rotation, _ = matrix.decompose()
             normals[i] = rotation @ mesh_struct.normals[i]
 
         modifier = mesh_ob.modifiers.new(rig.name, 'ARMATURE')
