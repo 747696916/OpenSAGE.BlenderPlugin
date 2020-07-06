@@ -469,6 +469,7 @@ def register():
 
 
 def unregister():
+    print('##### start  unregistered')
     remove_node_groups()
 
     for class_ in reversed(CLASSES):
@@ -483,6 +484,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 
+    print('##### unregistered')
 
 if __name__ == '__main__':
     register()
