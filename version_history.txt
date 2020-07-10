@@ -7,6 +7,8 @@ v0.5.1
 - Bugfix: handle multiple hlod, hierarchy and animation chunks
 - support for per face surface types via face maps
 - added support for vertex colors
+- support alpha values of textures
+- support for custom shaders via xml templates
 
 v0.5.0 (10.06.20)
 - use proper enums for vertex material shader properties
