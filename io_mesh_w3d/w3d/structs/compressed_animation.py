@@ -61,11 +61,11 @@ class TimeCodedDatum:
         self.value = value
 
     @staticmethod
-    def read(io_stream, type):
+    def read(io_stream, datum_type):
         result = TimeCodedDatum(
             time_code=read_ulong(io_stream),
             interpolated=False,
-            value=read_channel_value(io_stream, type))
+            value=read_channel_value(io_stream, datum_type))
 
         if (result.time_code >> 31) == 1:
             result.time_code &= ~(1 << 31)
@@ -73,26 +73,26 @@ class TimeCodedDatum:
         return result
 
     @staticmethod
-    def size(type):
-        if type == 6:
+    def size(datum_type):
+        if datum_type == 6:
             return 20
         return 8
 
-    def write(self, io_stream, type):
+    def write(self, io_stream, datum_type):
         time_code = self.time_code
         if self.interpolated:
             time_code |= (1 << 31)
 
         write_ulong(time_code, io_stream)
-        write_channel_value(self.value, io_stream, type)
+        write_channel_value(self.value, io_stream, datum_type)
 
 
 class TimeCodedAnimationChannel:
-    def __init__(self, num_time_codes=0, pivot=-1, vector_len=0, type=0, time_codes=None):
+    def __init__(self, num_time_codes=0, pivot=-1, vector_len=0, channel_type=0, time_codes=None):
         self.num_time_codes = num_time_codes
         self.pivot = pivot
         self.vector_len = vector_len
-        self.type = type
+        self.channel_type = channel_type
         self.time_codes = time_codes if time_codes is not None else []
 
     @staticmethod
@@ -101,16 +101,16 @@ class TimeCodedAnimationChannel:
             num_time_codes=read_ulong(io_stream),
             pivot=read_ushort(io_stream),
             vector_len=read_ubyte(io_stream),
-            type=read_ubyte(io_stream),
+            channel_type=read_ubyte(io_stream),
             time_codes=[])
 
-        result.time_codes = read_fixed_list(io_stream, result.num_time_codes, TimeCodedDatum.read, result.type)
+        result.time_codes = read_fixed_list(io_stream, result.num_time_codes, TimeCodedDatum.read, result.channel_type)
         return result
 
     def size(self, include_head=True):
         size = const_size(8, include_head)
         for time_code in self.time_codes:
-            size += time_code.size(self.type)
+            size += time_code.size(self.channel_type)
         return size
 
     def write(self, io_stream):
@@ -118,8 +118,8 @@ class TimeCodedAnimationChannel:
         write_ulong(self.num_time_codes, io_stream)
         write_ushort(self.pivot, io_stream)
         write_ubyte(self.vector_len, io_stream)
-        write_ubyte(self.type, io_stream)
-        write_list(self.time_codes, io_stream, TimeCodedDatum.write, self.type)
+        write_ubyte(self.channel_type, io_stream)
+        write_list(self.time_codes, io_stream, TimeCodedDatum.write, self.channel_type)
 
 
 class AdaptiveDeltaBlock:
@@ -155,7 +155,7 @@ class AdaptiveDeltaData:
     @staticmethod
     def read(io_stream, channel, bits):
         result = AdaptiveDeltaData(
-            initial_value=read_channel_value(io_stream, channel.type),
+            initial_value=read_channel_value(io_stream, channel.channel_type),
             bit_count=bits)
 
         count = (channel.num_time_codes + 15) >> 4
@@ -165,24 +165,24 @@ class AdaptiveDeltaData:
                 result.delta_blocks.append(AdaptiveDeltaBlock.read(io_stream, j, bits))
         return result
 
-    def size(self, type):
+    def size(self, data_type):
         size = 4
-        if type == 6:
+        if data_type == 6:
             size = 16
         size += list_size(self.delta_blocks, False)
         return size
 
-    def write(self, io_stream, type):
-        write_channel_value(self.initial_value, io_stream, type)
+    def write(self, io_stream, data_type):
+        write_channel_value(self.initial_value, io_stream, data_type)
         write_list(self.delta_blocks, io_stream, AdaptiveDeltaBlock.write)
 
 
 class AdaptiveDeltaAnimationChannel:
-    def __init__(self, num_time_codes=0, pivot=-1, vector_len=0, type=0, scale=0, data=None):
+    def __init__(self, num_time_codes=0, pivot=-1, vector_len=0, channel_type=0, scale=0, data=None):
         self.num_time_codes = num_time_codes
         self.pivot = pivot
         self.vector_len = vector_len
-        self.type = type
+        self.channel_type = channel_type
         self.scale = scale
         self.data = data
 
@@ -192,7 +192,7 @@ class AdaptiveDeltaAnimationChannel:
             num_time_codes=read_ulong(io_stream),
             pivot=read_ushort(io_stream),
             vector_len=read_ubyte(io_stream),
-            type=read_ubyte(io_stream),
+            channel_type=read_ubyte(io_stream),
             scale=read_short(io_stream))
 
         result.data = AdaptiveDeltaData.read(io_stream, result, 4)
@@ -201,7 +201,7 @@ class AdaptiveDeltaAnimationChannel:
 
     def size(self, include_head=True):
         size = const_size(13, include_head)
-        size += self.data.size(self.type)
+        size += self.data.size(self.channel_type)
         return size
 
     def write(self, io_stream):
@@ -209,9 +209,9 @@ class AdaptiveDeltaAnimationChannel:
         write_ulong(self.num_time_codes, io_stream)
         write_ushort(self.pivot, io_stream)
         write_ubyte(self.vector_len, io_stream)
-        write_ubyte(self.type, io_stream)
+        write_ubyte(self.channel_type, io_stream)
         write_short(self.scale, io_stream)
-        self.data.write(io_stream, self.type)
+        self.data.write(io_stream, self.channel_type)
 
         write_list(bytes([0, 0, 0]), io_stream, write_ubyte)  # write unknown bytes at the end
 
@@ -230,12 +230,12 @@ class AdaptiveDeltaMotionAnimationChannel:
         result.data = AdaptiveDeltaData.read(io_stream, channel, bits)
         return result
 
-    def size(self, type):
-        return 4 + self.data.size(type)
+    def size(self, channel_type):
+        return 4 + self.data.size(channel_type)
 
-    def write(self, io_stream, type):
+    def write(self, io_stream, channel_type):
         write_float(self.scale, io_stream)
-        self.data.write(io_stream, type)
+        self.data.write(io_stream, channel_type)
 
 
 class TimeCodedBitDatum:
@@ -264,10 +264,10 @@ class TimeCodedBitDatum:
 
 
 class TimeCodedBitChannel:
-    def __init__(self, num_time_codes=0, pivot=0, type=0, default_value=False, time_codes=None):
+    def __init__(self, num_time_codes=0, pivot=0, channel_type=0, default_value=False, time_codes=None):
         self.num_time_codes = num_time_codes
         self.pivot = pivot
-        self.type = type
+        self.channel_type = channel_type
         self.default_value = default_value
         self.time_codes = time_codes if time_codes is not None else []
 
@@ -276,7 +276,7 @@ class TimeCodedBitChannel:
         result = TimeCodedBitChannel(
             num_time_codes=read_ulong(io_stream),
             pivot=read_short(io_stream),
-            type=read_ubyte(io_stream),
+            channel_type=read_ubyte(io_stream),
             default_value=read_ubyte(io_stream))
 
         result.time_codes = read_fixed_list(io_stream, result.num_time_codes, TimeCodedBitDatum.read)
@@ -291,16 +291,16 @@ class TimeCodedBitChannel:
         write_chunk_head(W3D_CHUNK_COMPRESSED_BIT_CHANNEL, io_stream, self.size(False))
         write_ulong(self.num_time_codes, io_stream)
         write_ushort(self.pivot, io_stream)
-        write_ubyte(self.type, io_stream)
+        write_ubyte(self.channel_type, io_stream)
         write_ubyte(self.default_value, io_stream)
         write_list(self.time_codes, io_stream, TimeCodedBitDatum.write)
 
 
 class MotionChannel:
-    def __init__(self, delta_type=0, vector_len=0, type=0, num_time_codes=0, pivot=0, data=None):
+    def __init__(self, delta_type=0, vector_len=0, channel_type=0, num_time_codes=0, pivot=0, data=None):
         self.delta_type = delta_type
         self.vector_len = vector_len
-        self.type = type
+        self.channel_type = channel_type
         self.num_time_codes = num_time_codes
         self.pivot = pivot
         self.data = data
@@ -318,7 +318,7 @@ class MotionChannel:
             read_short(io_stream)  # alignment
 
         for x in range(self.num_time_codes):
-            result[x].value = read_channel_value(io_stream, self.type)
+            result[x].value = read_channel_value(io_stream, self.channel_type)
         return result
 
     def write_time_coded_data(self, io_stream):
@@ -329,7 +329,7 @@ class MotionChannel:
             write_short(0, io_stream)  # alignment
 
         for datum in self.data:
-            write_channel_value(datum.value, io_stream, self.type)
+            write_channel_value(datum.value, io_stream, self.channel_type)
 
     @staticmethod
     def read(io_stream):
@@ -338,7 +338,7 @@ class MotionChannel:
         result = MotionChannel(
             delta_type=read_ubyte(io_stream),
             vector_len=read_ubyte(io_stream),
-            type=read_ubyte(io_stream),
+            channel_type=read_ubyte(io_stream),
             num_time_codes=read_short(io_stream),
             pivot=read_short(io_stream))
 
@@ -352,11 +352,11 @@ class MotionChannel:
         size = const_size(8, include_head)
         if self.delta_type == 0:
             for datum in self.data:
-                size += datum.size(self.type) - 2  # time_code is a short here, not long!
+                size += datum.size(self.channel_type) - 2  # time_code is a short here, not long!
             if self.num_time_codes % 2 != 0:
                 size += 2  # alignment
         else:
-            size += self.data.size(self.type)
+            size += self.data.size(self.channel_type)
         return size
 
     def write(self, io_stream):
@@ -365,14 +365,14 @@ class MotionChannel:
         write_ubyte(0, io_stream)
         write_ubyte(self.delta_type, io_stream)
         write_ubyte(self.vector_len, io_stream)
-        write_ubyte(self.type, io_stream)
+        write_ubyte(self.channel_type, io_stream)
         write_short(self.num_time_codes, io_stream)
         write_short(self.pivot, io_stream)
 
         if self.delta_type == 0:
             self.write_time_coded_data(io_stream)
         else:
-            self.data.write(io_stream, self.type)
+            self.data.write(io_stream, self.channel_type)
 
 
 W3D_CHUNK_COMPRESSED_ANIMATION = 0x00000280
